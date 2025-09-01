@@ -5,6 +5,15 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "idx-vibe-agent-backend-38793350",
+          "region": "australia-southeast1"
+        }
+      }
     ]
   }
 }
