@@ -3,93 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bedrock Live Chat</title>
+    <title>Vibe Coder - POC</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 95vh; margin: 10px; background-color: #f4f4f9; }
-        #messages { list-style-type: none; padding: 0; margin: 0; overflow-y: scroll; flex-grow: 1; border: 1px solid #ddd; background-color: #fff; padding: 10px; border-radius: 8px; }
-        #messages li { margin-bottom: 10px; padding: 8px 12px; background-color: #e9e9eb; border-radius: 15px; width: fit-content; }
+        h1, h2 { text-align: center; color: #333; }
+        .container { border: 1px solid #ddd; background-color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
         #form { display: flex; margin-top: 10px; }
         #input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px 0 0 8px; }
         button { padding: 10px 15px; border: 1px solid #ccc; border-left: none; background-color: #007bff; color: white; border-radius: 0 8px 8px 0; cursor: pointer; }
         button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #aaa; }
+        #component-output { margin-top: 15px; background-color: #e9e9eb; border-radius: 8px; padding: 15px; white-space: pre-wrap; font-family: monospace; min-height: 50px; }
     </style>
 </head>
 <body>
 
-    <h1>Bedrock Live Chat</h1>
+    <h1>Vibe Coder - Multi-Agent Proof of Concept</h1>
     
-    <ul id="messages">
-        <li>Loading real-time messages...</li>
-    </ul>
+    <div class="container">
+        <h2>Component Builder Agent</h2>
+        <form id="form" action="">
+            <input id="input" autocomplete="off" placeholder="Describe a component (e.g., 'a red cancel button')" />
+            <button type="submit">Build Component</button>
+        </form>
+        <h3>Generated Component Code:</h3>
+        <pre id="component-output">(Code will appear here)</pre>
+    </div>
 
-    <form id="form" action="">
-        <input id="input" autocomplete="off" placeholder="Type a message..." />
-        <button type="submit">Send</button>
-    </form>
-
-    <!-- This is our entire application script -->
-    <script type="module">
-        // STEP 1: Import the functions we need from the LATEST Firebase SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyCl2kIUnyMSjzz3Y_D8c2_O7_vFp8AESnI",
-  authDomain: "vibe-agent-phoenix.firebaseapp.com",
-  projectId: "vibe-agent-phoenix",
-  storageBucket: "vibe-agent-phoenix.firebasestorage.app",
-  messagingSenderId: "835152977257",
-  appId: "1:835152977257:web:b24799be5b9c099ff6f1f8",
-  measurementId: "G-612ZZVJYPF"
-};
-
-        // Get the HTML elements we need
+    <script>
         const form = document.getElementById('form');
         const input = document.getElementById('input');
-        const messagesList = document.getElementById('messages');
+        const output = document.getElementById('component-output');
+        const submitButton = form.querySelector('button');
 
-        try {
-            // STEP 3: Initialize Firebase and Firestore
-            const app = initializeApp(firebaseConfig);
-            const db = getFirestore(app);
+        // The live URL of our Python Backend Bridge
+        const BACKEND_API_URL = 'https://idx-vibe-agent-backend-38793350-534939227554.australia-southeast1.run.app/api/build-component';
 
-            // Create a reference to our "messages" collection
-            const messagesCollection = collection(db, "messages");
-            const q = query(messagesCollection, orderBy("timestamp"));
-
-            // STEP 4: Set up the REAL-TIME listener
-            onSnapshot(q, (snapshot) => {
-                messagesList.innerHTML = ''; // Clear existing messages
-                snapshot.forEach((doc) => {
-                    const message = doc.data();
-                    const li = document.createElement('li');
-                    li.textContent = message.text;
-                    messagesList.appendChild(li);
+        async function getAIComponent(description) {
+            // 1. Disable the button and show a "thinking" message
+            submitButton.disabled = true;
+            output.textContent = 'Agent is thinking...';
+            
+            try {
+                // 2. Call our Python Backend Bridge
+                const response = await fetch(BACKEND_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    // The backend expects a JSON object with a "description" key
+                    body: JSON.stringify({ description: description }),
                 });
-                messagesList.scrollTop = messagesList.scrollHeight;
-            });
 
-            // STEP 5: Set up the form to WRITE new messages
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (input.value) {
-                    await addDoc(messagesCollection, {
-                        text: input.value,
-                        timestamp: serverTimestamp() // Use the server's timestamp for accuracy
-                    });
-                    input.value = '';
+                // 3. Check if the network request itself was successful
+                if (!response.ok) {
+                    // Get more details from the backend's error message if possible
+                    const errorData = await response.json().catch(() => ({})); // Gracefully handle non-json errors
+                    const errorMessage = errorData.details || `Error from backend: ${response.statusText}`;
+                    throw new Error(`Network response was not ok. Status: ${response.status}. Details: ${errorMessage}`);
                 }
-            });
 
-        } catch (error) {
-            const li = document.createElement('li');
-            li.textContent = `Error: ${error.message}`;
-            li.style.color = 'red';
-            messagesList.innerHTML = '';
-            messagesList.appendChild(li);
-            console.error(error);
+                // 4. Parse the JSON response from the backend
+                const data = await response.json();
+                
+                // 5. Display the component code returned by the agent
+                output.textContent = data.componentCode;
+
+            } catch (error) {
+                // 6. Display any errors that occur during the process
+                console.error('Error fetching component:', error);
+                output.textContent = `An error occurred: ${error.message}`;
+            } finally {
+                // 7. Re-enable the button regardless of success or failure
+                submitButton.disabled = false;
+            }
         }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value) {
+                getAIComponent(input.value);
+            }
+        });
     </script>
 
 </body>
