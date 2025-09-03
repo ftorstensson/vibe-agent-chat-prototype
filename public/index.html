@@ -3,124 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vibe Coder - POC</title>
+    <title>Vibe Coder - The Everything Agency</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f2f5; color: #1c1e21; }
-        h1 { color: #007bff; }
-        .container { width: 90%; max-width: 800px; border: 1px solid #ddd; background-color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        form { display: flex; flex-direction: column; margin-top: 10px; }
-        input, textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 10px; font-size: 16px; }
-        textarea { min-height: 80px; resize: vertical; }
-        button { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        button:hover { background-color: #0056b3; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; height: 95vh; margin: 10px; background-color: #f0f2f5; }
+        #chat-container { display: flex; flex-direction: column; flex-grow: 1; max-width: 800px; width: 100%; margin: 0 auto; border: 1px solid #ddd; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        #messages { list-style-type: none; padding: 20px; margin: 0; overflow-y: scroll; flex-grow: 1; }
+        #messages li { margin-bottom: 12px; display: flex; }
+        .message { padding: 10px 15px; border-radius: 18px; max-width: 85%; line-height: 1.5; }
+        .user { background-color: #007bff; color: white; margin-left: auto; }
+        .ai { background-color: #e9e9eb; color: #1c1e21; margin-right: auto; }
+        pre { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; background-color: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; margin-top: 10px; }
+        #form { display: flex; padding: 15px; border-top: 1px solid #ddd; }
+        #input { flex-grow: 1; padding: 12px; border: 1px solid #ccc; border-radius: 18px; font-size: 16px; }
+        button { padding: 12px 20px; margin-left: 10px; border: none; background-color: #007bff; color: white; border-radius: 18px; cursor: pointer; font-size: 16px; font-weight: bold; }
         button:disabled { background-color: #9db2bf; cursor: not-allowed; }
-        pre { margin-top: 15px; background-color: #f5f6f7; border-radius: 6px; padding: 15px; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; min-height: 50px; border: 1px solid #ddd; }
     </style>
 </head>
 <body>
 
-    <h1>Vibe Coder - Multi-Agent Proof of Concept</h1>
-    
-    <!-- Container for the NEW Multi-Agent Task Director -->
-    <div class="container">
-        <h2>Multi-Agent Task Director</h2>
-        <form id="task-form">
-            <textarea id="task-input" placeholder="Describe a high-level task (e.g., 'write a tweet about AI')"></textarea>
-            <button type="submit">Execute Task</button>
+    <div id="chat-container">
+        <ul id="messages"></ul>
+        <form id="form">
+            <input id="input" autocomplete="off" placeholder="Ask your AI Project Manager..." />
+            <button type="submit">Send</button>
         </form>
-        <h3>Final Artifact:</h3>
-        <pre id="task-output">(Artifact will appear here)</pre>
-    </div>
-
-    <!-- Container for the ORIGINAL Component Builder Agent -->
-    <div class="container">
-        <h2>Component Builder Agent</h2>
-        <form id="component-form">
-            <input id="component-input" autocomplete="off" placeholder="Describe a component (e.g., 'a red cancel button')" />
-            <button type="submit">Build Component</button>
-        </form>
-        <h3>Generated Component Code:</h3>
-        <pre id="component-output">(Code will appear here)</pre>
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        const BACKEND_BASE_URL = 'https://idx-vibe-agent-backend-38793350-534939227554.australia-southeast1.run.app';
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const messages = document.getElementById('messages');
+        const submitButton = form.querySelector('button');
 
-        // --- Multi-Agent Task Director Logic ---
-        const taskForm = document.getElementById('task-form');
-        const taskInput = document.getElementById('task-input');
-        const taskOutput = document.getElementById('task-output');
-        const taskSubmitButton = taskForm.querySelector('button');
+        const BACKEND_API_URL = 'https://idx-vibe-agent-backend-38793350-534939227554.australia-southeast1.run.app/api/chat'; // Placeholder for the new unified endpoint
 
-        taskForm.addEventListener('submit', async (e) => {
+        // --- Core UI Functions ---
+        function addMessage(text, sender) {
+            const li = document.createElement('li');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            // Basic check for code blocks
+            if (text.includes('```')) {
+                const parts = text.split('```');
+                messageDiv.textContent = parts[0]; // Text before code
+                const pre = document.createElement('pre');
+                pre.textContent = parts[1].trim(); // The code itself
+                messageDiv.appendChild(pre);
+            } else {
+                messageDiv.textContent = text;
+            }
+
+            li.appendChild(messageDiv);
+            messages.appendChild(li);
+            messages.scrollTop = messages.scrollHeight;
+            return messageDiv;
+        }
+        
+        // --- Form Submission Logic ---
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!taskInput.value) return;
+            const userInput = input.value.trim();
+            if (!userInput) return;
 
-            taskSubmitButton.disabled = true;
-            taskOutput.textContent = 'Orchestrating agent team...';
+            addMessage(userInput, 'user');
+            input.value = '';
+            submitButton.disabled = true;
+            
+            const thinkingMessage = addMessage('Thinking...', 'ai');
 
             try {
-                const response = await fetch(`${BACKEND_BASE_URL}/api/execute-task`, {
+                // NOTE: This will fail until we build the /api/chat endpoint in the backend.
+                // This is our next mission.
+                const response = await fetch(BACKEND_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ description: taskInput.value }),
+                    // We'll send the entire message history in the future, for now just the new message
+                    body: JSON.stringify({ message: userInput }),
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    const errorMessage = errorData.details || `Error: ${response.statusText}`;
-                    throw new Error(`Backend request failed. Status: ${response.status}. Details: ${errorMessage}`);
+                    throw new Error(errorData.details || `Request failed with status ${response.status}`);
                 }
 
                 const data = await response.json();
-                taskOutput.textContent = data.artifact;
+                thinkingMessage.parentElement.removeChild(thinkingMessage); // Remove "Thinking..."
+                addMessage(data.response, 'ai');
 
             } catch (error) {
-                console.error('Error executing task:', error);
-                taskOutput.textContent = `An error occurred: ${error.message}`;
+                console.error('Error:', error);
+                thinkingMessage.textContent = `Error: Could not connect to the AI Project Manager. Details: ${error.message}`;
             } finally {
-                taskSubmitButton.disabled = false;
+                submitButton.disabled = false;
             }
         });
 
-
-        // --- Component Builder Agent Logic ---
-        const componentForm = document.getElementById('component-form');
-        const componentInput = document.getElementById('component-input');
-        const componentOutput = document.getElementById('component-output');
-        const componentSubmitButton = componentForm.querySelector('button');
-
-        componentForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!componentInput.value) return;
-
-            componentSubmitButton.disabled = true;
-            componentOutput.textContent = 'Agent is thinking...';
-
-            try {
-                const response = await fetch(`${BACKEND_BASE_URL}/api/build-component`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ description: componentInput.value }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    const errorMessage = errorData.details || `Error: ${response.statusText}`;
-                    throw new Error(`Backend request failed. Status: ${response.status}. Details: ${errorMessage}`);
-                }
-
-                const data = await response.json();
-                componentOutput.textContent = data.componentCode;
-
-            } catch (error) {
-                console.error('Error fetching component:', error);
-                componentOutput.textContent = `An error occurred: ${error.message}`;
-            } finally {
-                componentSubmitButton.disabled = false;
-            }
-        });
+        // Add a welcome message
+        addMessage("Hello! I am your AI Project Manager. How can I help you build today?", 'ai');
     </script>
 
 </body>
