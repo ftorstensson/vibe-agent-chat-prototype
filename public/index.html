@@ -1,9 +1,10 @@
 <!--
-  File: public/index.html
-  Version: 1.0.0 (Unified Chat UI)
-  Date: 2025-09-04
-  Objective: This file provides the complete, single-page user interface for the
-             Vibe Coder Multi-Agent Proof of Concept.
+File: public/index.html
+Version: 1.1.0 (Smart Router Payload Handling)
+Date: 2025-09-05
+Objective: This file provides the complete, single-page user interface for the
+Vibe Coder Multi-Agent Proof of Concept. It has been updated to
+correctly handle the structured JSON payloads from the Smart Router.
 -->
 
 <!DOCTYPE html>
@@ -11,13 +12,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Version: 1.1.0 (Smart Router Payload Handling) -->
     <title>Vibe Coder - The Everything Agency</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; height: 95vh; margin: 10px; background-color: #f0f2f5; }
         #chat-container { display: flex; flex-direction: column; flex-grow: 1; max-width: 800px; width: 100%; margin: 0 auto; border: 1px solid #ddd; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
         #messages { list-style-type: none; padding: 20px; margin: 0; overflow-y: scroll; flex-grow: 1; }
         #messages li { margin-bottom: 12px; display: flex; }
-        .message { padding: 10px 15px; border-radius: 18px; max-width: 85%; line-height: 1.5; }
+        .message { padding: 10px 15px; border-radius: 18px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
         .user { background-color: #007bff; color: white; margin-left: auto; }
         .ai { background-color: #e9e9eb; color: #1c1e21; margin-right: auto; }
         pre { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; background-color: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; margin-top: 10px; }
@@ -43,25 +45,28 @@
         const messages = document.getElementById('messages');
         const submitButton = form.querySelector('button');
 
-        const BACKEND_API_URL = 'https://idx-vibe-agent-backend-38793350-534939227554.australia-southeast1.run.app/api/chat'; // Placeholder for the new unified endpoint
+        const BACKEND_API_URL = 'https://idx-vibe-agent-backend-38793350-534939227554.australia-southeast1.run.app/api/chat';
 
         // --- Core UI Functions ---
         function addMessage(text, sender) {
             const li = document.createElement('li');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            
-            // Basic check for code blocks
-            if (text.includes('```')) {
-                const parts = text.split('```');
-                messageDiv.textContent = parts[0]; // Text before code
-                const pre = document.createElement('pre');
-                pre.textContent = parts[1].trim(); // The code itself
-                messageDiv.appendChild(pre);
-            } else {
-                messageDiv.textContent = text;
-            }
+            messageDiv.textContent = text;
+            li.appendChild(messageDiv);
+            messages.appendChild(li);
+            messages.scrollTop = messages.scrollHeight;
+            return messageDiv;
+        }
 
+        function addFormattedCode(code) {
+            const li = document.createElement('li');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai';
+            messageDiv.textContent = "Here is the component you requested:";
+            const pre = document.createElement('pre');
+            pre.textContent = code;
+            messageDiv.appendChild(pre);
             li.appendChild(messageDiv);
             messages.appendChild(li);
             messages.scrollTop = messages.scrollHeight;
@@ -81,14 +86,13 @@
             const thinkingMessage = addMessage('Thinking...', 'ai');
 
             try {
-                // NOTE: This will fail until we build the /api/chat endpoint in the backend.
-                // This is our next mission.
                 const response = await fetch(BACKEND_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // We'll send the entire message history in the future, for now just the new message
                     body: JSON.stringify({ message: userInput }),
                 });
+
+                thinkingMessage.parentElement.removeChild(thinkingMessage); // Remove "Thinking..."
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
@@ -96,12 +100,28 @@
                 }
 
                 const data = await response.json();
-                thinkingMessage.parentElement.removeChild(thinkingMessage); // Remove "Thinking..."
-                addMessage(data.response, 'ai');
+
+                // --- THE FIX: Handle the new response format ---
+                switch(data.type) {
+                    case 'component_code':
+                        addFormattedCode(data.payload);
+                        break;
+                    case 'artifact':
+                    case 'chat':
+                        addMessage(data.payload, 'ai');
+                        break;
+                    default:
+                        throw new Error(`Unknown response type: ${data.type}`);
+                }
+                // --- END OF FIX ---
 
             } catch (error) {
                 console.error('Error:', error);
-                thinkingMessage.textContent = `Error: Could not connect to the AI Project Manager. Details: ${error.message}`;
+                // Ensure "Thinking..." is removed even on error
+                if (thinkingMessage.parentElement) {
+                    thinkingMessage.parentElement.removeChild(thinkingMessage);
+                }
+                addMessage(`Error: Could not connect to the AI Project Manager. Details: ${error.message}`, 'ai');
             } finally {
                 submitButton.disabled = false;
             }
