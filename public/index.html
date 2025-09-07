@@ -1,10 +1,9 @@
 <!--
 File: public/index.html
-Version: 1.1.0 (Smart Router Payload Handling)
+Version: 1.2.0 (Frontend Conversational Memory)
 Date: 2025-09-05
-Objective: This file provides the complete, single-page user interface for the
-Vibe Coder Multi-Agent Proof of Concept. It has been updated to
-correctly handle the structured JSON payloads from the Smart Router.
+Objective: Implements a client-side conversationHistory array to maintain
+state and sends the full history to the backend with each request.
 -->
 
 <!DOCTYPE html>
@@ -12,7 +11,6 @@ correctly handle the structured JSON payloads from the Smart Router.
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Version: 1.1.0 (Smart Router Payload Handling) -->
     <title>Vibe Coder - The Everything Agency</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; height: 95vh; margin: 10px; background-color: #f0f2f5; }
@@ -46,9 +44,16 @@ correctly handle the structured JSON payloads from the Smart Router.
         const submitButton = form.querySelector('button');
 
         const BACKEND_API_URL = 'https://idx-vibe-agent-backend-38793350-534939227554.australia-southeast1.run.app/api/chat';
+        
+        // --- NEW: Client-side state for the conversation ---
+        let conversationHistory = [];
 
         // --- Core UI Functions ---
         function addMessage(text, sender) {
+            // Add to our Javascript state
+            conversationHistory.push({ role: sender, content: text });
+
+            // Add to the UI
             const li = document.createElement('li');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
@@ -60,6 +65,10 @@ correctly handle the structured JSON payloads from the Smart Router.
         }
 
         function addFormattedCode(code) {
+             // Add to our Javascript state
+            conversationHistory.push({ role: 'ai', content: code });
+
+            // Add to the UI
             const li = document.createElement('li');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ai';
@@ -86,13 +95,20 @@ correctly handle the structured JSON payloads from the Smart Router.
             const thinkingMessage = addMessage('Thinking...', 'ai');
 
             try {
+                // --- THE FIX: Send the entire history ---
                 const response = await fetch(BACKEND_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: userInput }),
+                    body: JSON.stringify({
+                        message: userInput,
+                        conversationHistory: conversationHistory 
+                    }),
                 });
+                // --- END OF FIX ---
 
-                thinkingMessage.parentElement.removeChild(thinkingMessage); // Remove "Thinking..."
+                // Remove the "Thinking..." message from UI and history
+                thinkingMessage.parentElement.removeChild(thinkingMessage);
+                conversationHistory.pop();
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
@@ -101,7 +117,6 @@ correctly handle the structured JSON payloads from the Smart Router.
 
                 const data = await response.json();
 
-                // --- THE FIX: Handle the new response format ---
                 switch(data.type) {
                     case 'component_code':
                         addFormattedCode(data.payload);
@@ -113,13 +128,12 @@ correctly handle the structured JSON payloads from the Smart Router.
                     default:
                         throw new Error(`Unknown response type: ${data.type}`);
                 }
-                // --- END OF FIX ---
 
             } catch (error) {
                 console.error('Error:', error);
-                // Ensure "Thinking..." is removed even on error
                 if (thinkingMessage.parentElement) {
                     thinkingMessage.parentElement.removeChild(thinkingMessage);
+                    conversationHistory.pop();
                 }
                 addMessage(`Error: Could not connect to the AI Project Manager. Details: ${error.message}`, 'ai');
             } finally {
