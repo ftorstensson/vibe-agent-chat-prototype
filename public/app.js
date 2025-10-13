@@ -1,13 +1,8 @@
 // ===============================================================================
-// Configuration
+// Configuration & State
 // ===============================================================================
 
 const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app";
-
-// ===============================================================================
-// State Management
-// ===============================================================================
-
 let conversationId = null;
 
 // ===============================================================================
@@ -21,18 +16,14 @@ const historyList = document.getElementById("history-list");
 const newChatButton = document.getElementById("new-chat-button");
 
 // ===============================================================================
-// Event Listeners
+// Event Listeners & Initialization
 // ===============================================================================
 
-// Run initialization logic when the page first loads.
 document.addEventListener("DOMContentLoaded", () => {
     loadConversationHistory();
 });
 
-// Listen for the user to submit a message.
 chatForm.addEventListener("submit", handleSendMessage);
-
-// Listen for the user to click the "New Chat" button.
 newChatButton.addEventListener("click", startNewConversation);
 
 // ===============================================================================
@@ -40,7 +31,7 @@ newChatButton.addEventListener("click", startNewConversation);
 // ===============================================================================
 
 /**
- * Fetches the list of conversations from the backend and renders them.
+ * Fetches and displays the list of past conversations.
  */
 async function loadConversationHistory() {
     try {
@@ -53,13 +44,8 @@ async function loadConversationHistory() {
             const item = document.createElement("div");
             item.classList.add("history-item");
             item.textContent = convo.title;
-            item.dataset.id = convo.id; // Store the ID on the element
-            item.addEventListener("click", () => {
-                // For this version, clicking a chat just starts a new one for simplicity.
-                // A future version would load the full chat history.
-                startNewConversation();
-                alert(`In a future version, this would load conversation:\n${convo.id}\n'${convo.title}'`);
-            });
+            item.dataset.id = convo.id;
+            item.addEventListener("click", () => loadConversation(convo.id));
             historyList.appendChild(item);
         });
     } catch (error) {
@@ -68,9 +54,38 @@ async function loadConversationHistory() {
 }
 
 /**
- * Handles the user submitting a message to the agent.
- * @param {Event} event The form submission event.
+ * NEW: Fetches and renders the full history of a selected conversation.
+ * @param {string} id The ID of the conversation to load.
  */
+async function loadConversation(id) {
+    try {
+        console.log(`Loading conversation: ${id}`);
+        const response = await fetch(`${BACKEND_API_URL}/conversation/${id}`);
+        if (!response.ok) throw new Error("Failed to fetch conversation details");
+        const convoData = await response.json();
+
+        startNewConversation(); // Clear the UI
+        conversationId = id; // Set the active conversation ID
+
+        // Render each message from the history
+        convoData.messages.forEach(message => {
+            if (message.role === 'user') {
+                addMessageToChat(message.content, 'user');
+            } else if (message.role === 'assistant') {
+                renderAgentResponse(message.content);
+            }
+        });
+
+        // Highlight the selected chat in the history panel
+        document.querySelectorAll('.history-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.id === id);
+        });
+
+    } catch (error) {
+        console.error("Error loading conversation:", error);
+    }
+}
+
 function handleSendMessage(event) {
     event.preventDefault();
     const userMessage = messageInput.value;
@@ -81,21 +96,18 @@ function handleSendMessage(event) {
     messageInput.value = "";
 }
 
-/**
- * Resets the state to start a new conversation.
- */
 function startNewConversation() {
     conversationId = null;
-    chatMessages.innerHTML = ""; // Clear the chat window
+    chatMessages.innerHTML = "";
     messageInput.placeholder = "Start a new mission...";
-    console.log("Starting new conversation.");
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    console.log("Started new conversation.");
 }
 
-/**
- * Sends a message to our Backend Orchestrator API.
- * @param {string} message The user's message.
- */
 async function sendMessageToBackend(message) {
+    const isNewConversation = !conversationId;
     try {
         const payload = { message, conversation_id: conversationId };
         const response = await fetch(`${BACKEND_API_URL}/chat`, {
@@ -114,21 +126,16 @@ async function sendMessageToBackend(message) {
 
         renderAgentResponse(responseData);
 
-        // If this was the first message of a new chat, refresh the history.
-        if (chatMessages.children.length <= 2) {
+        if (isNewConversation) {
              loadConversationHistory();
         }
 
     } catch (error) {
-        console.error("Error sending message to backend:", error);
-        addMessageToChat("Sorry, I encountered an error. Please check the console.", "agent");
+        console.error("Error sending message:", error);
+        addMessageToChat("Sorry, an error occurred. Please check the console.", "agent");
     }
 }
 
-/**
- * Renders the different types of responses from the agent.
- * @param {object} responseData The JSON data from the backend.
- */
 function renderAgentResponse(responseData) {
     let content = "";
     if (responseData.reply) content += `<p>${responseData.reply}</p>`;
