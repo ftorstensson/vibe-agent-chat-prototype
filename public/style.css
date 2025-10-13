@@ -4,20 +4,77 @@ body {
     background-color: #121212;
     color: #e0e0e0;
     margin: 0;
+    overflow: hidden; /* Prevent body scrollbars */
+}
+
+/* NEW: Main two-column layout container */
+.app-container {
     display: flex;
-    justify-content: center;
-    align-items: center;
     height: 100vh;
 }
 
-/* Main Chat Container */
-.chat-container {
-    width: 80%;
-    max-width: 800px;
-    height: 90vh;
+/* NEW: Conversation History Panel */
+.history-panel {
+    width: 260px;
     background-color: #1e1e1e;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    border-right: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-header {
+    padding: 1rem;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-header h3 {
+    margin: 0;
+}
+
+#new-chat-button {
+    background: none;
+    border: 1px solid #444;
+    color: #e0e0e0;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#new-chat-button:hover {
+    background-color: #333;
+}
+
+.history-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.history-item {
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.history-item:hover {
+    background-color: #2a2a2a;
+}
+
+.history-item.active {
+    background-color: #3e4e88;
+}
+
+/* Main Chat Container (Adjusted for flex layout) */
+.chat-container {
+    flex-grow: 1;
+    height: 100vh; /* Take full height of the parent */
+    background-color: #181818; /* Slightly different background */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -53,7 +110,7 @@ body {
     margin-bottom: 1rem;
     padding: 0.75rem 1rem;
     border-radius: 18px;
-    max-width: 75%;
+    max-width: 85%; /* Slightly wider max-width */
     line-height: 1.5;
 }
 
@@ -78,6 +135,8 @@ body {
     word-wrap: break-word;
     font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
     font-size: 0.9rem;
+    max-height: 400px; /* Limit height of long code blocks */
+    overflow-y: auto;
 }
 
 .agent-message ol {

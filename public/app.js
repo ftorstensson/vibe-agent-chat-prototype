@@ -2,15 +2,12 @@
 // Configuration
 // ===============================================================================
 
-// This is the URL of our deployed Backend Orchestrator.
-const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app/chat";
+const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app";
 
 // ===============================================================================
 // State Management
 // ===============================================================================
 
-// We store the current conversation_id in a global variable.
-// This is the "memory" of our frontend.
 let conversationId = null;
 
 // ===============================================================================
@@ -20,32 +17,79 @@ let conversationId = null;
 const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 const chatMessages = document.getElementById("chat-messages");
+const historyList = document.getElementById("history-list");
+const newChatButton = document.getElementById("new-chat-button");
 
 // ===============================================================================
 // Event Listeners
 // ===============================================================================
 
-// Listen for when the user submits the form (presses Send or Enter).
-chatForm.addEventListener("submit", (event) => {
-    // Prevent the default browser action of reloading the page.
-    event.preventDefault();
-
-    const userMessage = messageInput.value;
-    if (!userMessage) return; // Don't send empty messages.
-
-    // Display the user's message in the chat window.
-    addMessageToChat(userMessage, "user");
-
-    // Send the message to the backend and handle the response.
-    sendMessageToBackend(userMessage);
-
-    // Clear the input box for the next message.
-    messageInput.value = "";
+// Run initialization logic when the page first loads.
+document.addEventListener("DOMContentLoaded", () => {
+    loadConversationHistory();
 });
+
+// Listen for the user to submit a message.
+chatForm.addEventListener("submit", handleSendMessage);
+
+// Listen for the user to click the "New Chat" button.
+newChatButton.addEventListener("click", startNewConversation);
 
 // ===============================================================================
 // Core Functions
 // ===============================================================================
+
+/**
+ * Fetches the list of conversations from the backend and renders them.
+ */
+async function loadConversationHistory() {
+    try {
+        const response = await fetch(`${BACKEND_API_URL}/conversations`);
+        if (!response.ok) throw new Error("Failed to fetch history");
+        const conversations = await response.json();
+        
+        historyList.innerHTML = ""; // Clear existing list
+        conversations.forEach(convo => {
+            const item = document.createElement("div");
+            item.classList.add("history-item");
+            item.textContent = convo.title;
+            item.dataset.id = convo.id; // Store the ID on the element
+            item.addEventListener("click", () => {
+                // For this version, clicking a chat just starts a new one for simplicity.
+                // A future version would load the full chat history.
+                startNewConversation();
+                alert(`In a future version, this would load conversation:\n${convo.id}\n'${convo.title}'`);
+            });
+            historyList.appendChild(item);
+        });
+    } catch (error) {
+        console.error("Error loading conversation history:", error);
+    }
+}
+
+/**
+ * Handles the user submitting a message to the agent.
+ * @param {Event} event The form submission event.
+ */
+function handleSendMessage(event) {
+    event.preventDefault();
+    const userMessage = messageInput.value;
+    if (!userMessage) return;
+
+    addMessageToChat(userMessage, "user");
+    sendMessageToBackend(userMessage);
+    messageInput.value = "";
+}
+
+/**
+ * Resets the state to start a new conversation.
+ */
+function startNewConversation() {
+    conversationId = null;
+    chatMessages.innerHTML = ""; // Clear the chat window
+    messageInput.placeholder = "Start a new mission...";
+    console.log("Starting new conversation.");
+}
 
 /**
  * Sends a message to our Backend Orchestrator API.
@@ -53,33 +97,27 @@ chatForm.addEventListener("submit", (event) => {
  */
 async function sendMessageToBackend(message) {
     try {
-        const payload = {
-            message: message,
-            // Include the conversation_id if we have one.
-            conversation_id: conversationId, 
-        };
-
-        const response = await fetch(BACKEND_API_URL, {
+        const payload = { message, conversation_id: conversationId };
+        const response = await fetch(`${BACKEND_API_URL}/chat`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
         });
 
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+        
         const responseData = await response.json();
 
-        // The backend ALWAYS returns a conversation_id. We must save it.
         if (responseData.conversation_id) {
             conversationId = responseData.conversation_id;
         }
 
-        // Render the agent's response based on what it contains.
         renderAgentResponse(responseData);
+
+        // If this was the first message of a new chat, refresh the history.
+        if (chatMessages.children.length <= 2) {
+             loadConversationHistory();
+        }
 
     } catch (error) {
         console.error("Error sending message to backend:", error);
@@ -93,25 +131,15 @@ async function sendMessageToBackend(message) {
  */
 function renderAgentResponse(responseData) {
     let content = "";
-
-    if (responseData.reply) {
-        content += `<p>${responseData.reply}</p>`;
-    }
-
+    if (responseData.reply) content += `<p>${responseData.reply}</p>`;
     if (responseData.plan) {
-        content += `<h4>${responseData.plan.title}</h4>`;
-        content += "<ol>";
-        responseData.plan.steps.forEach(step => {
-            content += `<li>${step}</li>`;
-        });
+        content += `<h4>${responseData.plan.title}</h4><ol>`;
+        responseData.plan.steps.forEach(step => { content += `<li>${step}</li>`; });
         content += "</ol>";
     }
-
     if (responseData.code_file) {
-        content += `<h4>${responseData.code_file.filename}</h4>`;
-        content += `<pre>${escapeHtml(responseData.code_file.code)}</pre>`;
+        content += `<h4>${responseData.code_file.filename}</h4><pre>${escapeHtml(responseData.code_file.code)}</pre>`;
     }
-    
     addMessageToChat(content, "agent");
 }
 
@@ -119,32 +147,14 @@ function renderAgentResponse(responseData) {
 // UI Helper Functions
 // ===============================================================================
 
-/**
- * Creates a new message element and adds it to the chat window.
- * @param {string} content The HTML content of the message.
- * @param {'user' | 'agent'} sender The sender of the message.
- */
 function addMessageToChat(content, sender) {
     const messageElement = document.createElement("div");
     messageElement.classList.add("message", `${sender}-message`);
     messageElement.innerHTML = content;
     chatMessages.appendChild(messageElement);
-
-    // Automatically scroll to the bottom to show the new message.
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-/**
- * A simple utility to escape HTML special characters to prevent rendering issues
- * when displaying code.
- * @param {string} unsafe The raw string.
- * @returns {string} The escaped string.
- */
 function escapeHtml(unsafe) {
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }

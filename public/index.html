@@ -7,26 +7,43 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    
+    <!-- NEW: Main container for the two-column layout -->
+    <div class="app-container">
 
-    <div class="chat-container">
-        <div class="chat-header">
-            <h2>Vibe Coder Agency</h2>
-            <p>Phase 1: Proof of Tool</p>
+        <!-- NEW: Sidebar for conversation history -->
+        <div class="history-panel" id="history-panel">
+            <div class="history-header">
+                <h3>Conversations</h3>
+                <button id="new-chat-button">+ New Chat</button>
+            </div>
+            <div class="history-list" id="history-list">
+                <!-- Conversation history will be added here by JavaScript -->
+            </div>
         </div>
-        
-        <div class="chat-messages" id="chat-messages">
-            <!-- Messages will be added here by JavaScript -->
+
+        <!-- This is the existing chat container -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>Vibe Coder Agency</h2>
+                <p>Phase 1.5: Persistent Memory</p>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be added here by JavaScript -->
+            </div>
+            
+            <form class="chat-input-form" id="chat-form">
+                <input 
+                    type="text" 
+                    id="message-input" 
+                    placeholder="Start a new mission..." 
+                    autocomplete="off"
+                    required>
+                <button type="submit">Send</button>
+            </form>
         </div>
-        
-        <form class="chat-input-form" id="chat-form">
-            <input 
-                type="text" 
-                id="message-input" 
-                placeholder="Start a new mission..." 
-                autocomplete="off"
-                required>
-            <button type="submit">Send</button>
-        </form>
+
     </div>
 
     <script src="app.js"></script>
