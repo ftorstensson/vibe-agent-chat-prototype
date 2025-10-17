@@ -1,3 +1,9 @@
+<!--
+ Vibe Coder Chat Prototype Frontend
+ v2.0 (Markdown UI)
+ This version introduces the 'showdown' library to enable markdown rendering
+ for AI responses, resolving the formatting regression.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,10 +14,10 @@
 </head>
 <body>
     
-    <!-- NEW: Main container for the two-column layout -->
+    <!-- Main container for the two-column layout -->
     <div class="app-container">
 
-        <!-- NEW: Sidebar for conversation history -->
+        <!-- Sidebar for conversation history -->
         <div class="history-panel" id="history-panel">
             <div class="history-header">
                 <h3>Conversations</h3>
@@ -46,6 +52,8 @@
 
     </div>
 
+    <!-- [NEW] Include the showdown library for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

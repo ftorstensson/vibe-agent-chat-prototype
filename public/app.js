@@ -1,9 +1,19 @@
 // ===============================================================================
+// Vibe Coder Chat Prototype Frontend
+// v2.0 (Markdown UI)
+// This version introduces the 'showdown' library to enable markdown rendering
+// for AI responses, resolving the formatting regression.
+// ===============================================================================
+
+// ===============================================================================
 // Configuration & State
 // ===============================================================================
 
 const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app";
 let conversationId = null;
+
+// [NEW] Initialize the showdown markdown converter
+const converter = new showdown.Converter();
 
 // ===============================================================================
 // DOM Element References
@@ -136,9 +146,17 @@ async function sendMessageToBackend(message) {
     }
 }
 
+/**
+ * [REFACTORED] Renders the agent's response, now with Markdown support.
+ * @param {object} responseData The structured data from the backend.
+ */
 function renderAgentResponse(responseData) {
     let content = "";
-    if (responseData.reply) content += `<p>${responseData.reply}</p>`;
+    if (responseData.reply) {
+        // [NEW] Convert the markdown reply from the AI into safe, clean HTML
+        const htmlReply = converter.makeHtml(responseData.reply);
+        content += htmlReply;
+    }
     if (responseData.plan) {
         content += `<h4>${responseData.plan.title}</h4><ol>`;
         responseData.plan.steps.forEach(step => { content += `<li>${step}</li>`; });
@@ -150,6 +168,7 @@ function renderAgentResponse(responseData) {
     addMessageToChat(content, "agent");
 }
 
+
 // ===============================================================================
 // UI Helper Functions
 // ===============================================================================
@@ -157,7 +176,12 @@ function renderAgentResponse(responseData) {
 function addMessageToChat(content, sender) {
     const messageElement = document.createElement("div");
     messageElement.classList.add("message", `${sender}-message`);
-    messageElement.innerHTML = content;
+    // Check if the content is just a plain string (from user) or rich HTML (from agent)
+    if (sender === 'user') {
+        messageElement.textContent = content;
+    } else {
+        messageElement.innerHTML = content;
+    }
     chatMessages.appendChild(messageElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
