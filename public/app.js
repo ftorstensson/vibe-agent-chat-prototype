@@ -1,8 +1,8 @@
 // ===============================================================================
 // Vibe Coder Chat Prototype Frontend
-// v2.0 (Markdown UI)
-// This version introduces the 'showdown' library to enable markdown rendering
-// for AI responses, resolving the formatting regression.
+// v3.0 (Observability UI)
+// This version introduces the 'Observability Badge'. It now visually displays
+// which agent was invoked for a given response, fulfilling a key strategic goal.
 // ===============================================================================
 
 // ===============================================================================
@@ -12,7 +12,6 @@
 const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app";
 let conversationId = null;
 
-// [NEW] Initialize the showdown markdown converter
 const converter = new showdown.Converter();
 
 // ===============================================================================
@@ -40,16 +39,13 @@ newChatButton.addEventListener("click", startNewConversation);
 // Core Functions
 // ===============================================================================
 
-/**
- * Fetches and displays the list of past conversations.
- */
 async function loadConversationHistory() {
     try {
         const response = await fetch(`${BACKEND_API_URL}/conversations`);
         if (!response.ok) throw new Error("Failed to fetch history");
         const conversations = await response.json();
         
-        historyList.innerHTML = ""; // Clear existing list
+        historyList.innerHTML = "";
         conversations.forEach(convo => {
             const item = document.createElement("div");
             item.classList.add("history-item");
@@ -63,10 +59,6 @@ async function loadConversationHistory() {
     }
 }
 
-/**
- * NEW: Fetches and renders the full history of a selected conversation.
- * @param {string} id The ID of the conversation to load.
- */
 async function loadConversation(id) {
     try {
         console.log(`Loading conversation: ${id}`);
@@ -74,19 +66,17 @@ async function loadConversation(id) {
         if (!response.ok) throw new Error("Failed to fetch conversation details");
         const convoData = await response.json();
 
-        startNewConversation(); // Clear the UI
-        conversationId = id; // Set the active conversation ID
+        startNewConversation();
+        conversationId = id;
 
-        // Render each message from the history
         convoData.messages.forEach(message => {
             if (message.role === 'user') {
-                addMessageToChat(message.content, 'user');
+                addMessageToChat({ text: message.content }, 'user');
             } else if (message.role === 'assistant') {
                 renderAgentResponse(message.content);
             }
         });
 
-        // Highlight the selected chat in the history panel
         document.querySelectorAll('.history-item').forEach(item => {
             item.classList.toggle('active', item.dataset.id === id);
         });
@@ -101,7 +91,7 @@ function handleSendMessage(event) {
     const userMessage = messageInput.value;
     if (!userMessage) return;
 
-    addMessageToChat(userMessage, "user");
+    addMessageToChat({ text: userMessage }, "user");
     sendMessageToBackend(userMessage);
     messageInput.value = "";
 }
@@ -142,30 +132,22 @@ async function sendMessageToBackend(message) {
 
     } catch (error) {
         console.error("Error sending message:", error);
-        addMessageToChat("Sorry, an error occurred. Please check the console.", "agent");
+        addMessageToChat({ error: "Sorry, an error occurred. Please check the console." }, "agent");
     }
 }
 
 /**
- * [REFACTORED] Renders the agent's response, now with Markdown support.
+ * [REFACTORED] Renders the agent's response, now with Observability Badge.
  * @param {object} responseData The structured data from the backend.
  */
 function renderAgentResponse(responseData) {
-    let content = "";
-    if (responseData.reply) {
-        // [NEW] Convert the markdown reply from the AI into safe, clean HTML
-        const htmlReply = converter.makeHtml(responseData.reply);
-        content += htmlReply;
-    }
-    if (responseData.plan) {
-        content += `<h4>${responseData.plan.title}</h4><ol>`;
-        responseData.plan.steps.forEach(step => { content += `<li>${step}</li>`; });
-        content += "</ol>";
-    }
-    if (responseData.code_file) {
-        content += `<h4>${responseData.code_file.filename}</h4><pre>${escapeHtml(responseData.code_file.code)}</pre>`;
-    }
-    addMessageToChat(content, "agent");
+    let contentPayload = {
+        text: responseData.reply || "",
+        plan: responseData.plan || null,
+        code: responseData.code_file || null,
+        invoked_agent: responseData.invoked_agent || null, // Capture the agent name
+    };
+    addMessageToChat(contentPayload, "agent");
 }
 
 
@@ -173,18 +155,46 @@ function renderAgentResponse(responseData) {
 // UI Helper Functions
 // ===============================================================================
 
-function addMessageToChat(content, sender) {
+/**
+ * [REFACTORED] Adds a message to the chat UI. Now handles a payload object.
+ * @param {object} payload The content payload for the message.
+ * @param {string} sender 'user' or 'agent'.
+ */
+function addMessageToChat(payload, sender) {
     const messageElement = document.createElement("div");
     messageElement.classList.add("message", `${sender}-message`);
-    // Check if the content is just a plain string (from user) or rich HTML (from agent)
-    if (sender === 'user') {
-        messageElement.textContent = content;
-    } else {
-        messageElement.innerHTML = content;
+
+    let content = "";
+
+    // [NEW] Add the Observability Badge if an agent was invoked
+    if (sender === 'agent' && payload.invoked_agent) {
+        content += `<div class="agent-badge">${payload.invoked_agent.toUpperCase()}</div>`;
     }
+
+    if (payload.text) {
+        const htmlReply = converter.makeHtml(payload.text);
+        content += htmlReply;
+    }
+
+    if (payload.plan) {
+        content += `<h4>${payload.plan.title}</h4><ol>`;
+        payload.plan.steps.forEach(step => { content += `<li>${step}</li>`; });
+        content += "</ol>";
+    }
+    
+    if (payload.code) {
+        content += `<h4>${payload.code.filename}</h4><pre>${escapeHtml(payload.code.code)}</pre>`;
+    }
+
+    if (payload.error) {
+        content += `<p class="error-message">${payload.error}</p>`;
+    }
+
+    messageElement.innerHTML = content;
     chatMessages.appendChild(messageElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
 
 function escapeHtml(unsafe) {
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
