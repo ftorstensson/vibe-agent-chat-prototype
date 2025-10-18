@@ -1,8 +1,9 @@
 // ===============================================================================
 // Vibe Coder Chat Prototype Frontend
-// v3.0 (Observability UI)
-// This version introduces the 'Observability Badge'. It now visually displays
-// which agent was invoked for a given response, fulfilling a key strategic goal.
+// v5.0 (Real-Time UX - Final)
+// This version is a complete refactor to a Firestore-driven, real-time
+// architecture. It uses onSnapshot listeners to enable a "thinking" indicator,
+// displays an automatic welcome message, and shows an agent observability badge.
 // ===============================================================================
 
 // ===============================================================================
@@ -11,7 +12,10 @@
 
 const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app";
 let conversationId = null;
+let unsubscribeMessages = null; // To store the Firestore listener cleanup function
 
+// Firebase is initialized automatically by /__/firebase/init.js
+const db = firebase.firestore();
 const converter = new showdown.Converter();
 
 // ===============================================================================
@@ -21,7 +25,6 @@ const converter = new showdown.Converter();
 const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 const chatMessages = document.getElementById("chat-messages");
-const historyList = document.getElementById("history-list");
 const newChatButton = document.getElementById("new-chat-button");
 
 // ===============================================================================
@@ -29,173 +32,137 @@ const newChatButton = document.getElementById("new-chat-button");
 // ===============================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    loadConversationHistory();
+    startNewConversation();
 });
 
 chatForm.addEventListener("submit", handleSendMessage);
 newChatButton.addEventListener("click", startNewConversation);
 
 // ===============================================================================
-// Core Functions
+// Core Functions - REFACTORED FOR REAL-TIME
 // ===============================================================================
 
-async function loadConversationHistory() {
-    try {
-        const response = await fetch(`${BACKEND_API_URL}/conversations`);
-        if (!response.ok) throw new Error("Failed to fetch history");
-        const conversations = await response.json();
-        
-        historyList.innerHTML = "";
-        conversations.forEach(convo => {
-            const item = document.createElement("div");
-            item.classList.add("history-item");
-            item.textContent = convo.title;
-            item.dataset.id = convo.id;
-            item.addEventListener("click", () => loadConversation(convo.id));
-            historyList.appendChild(item);
-        });
-    } catch (error) {
-        console.error("Error loading conversation history:", error);
-    }
-}
-
-async function loadConversation(id) {
-    try {
-        console.log(`Loading conversation: ${id}`);
-        const response = await fetch(`${BACKEND_API_URL}/conversation/${id}`);
-        if (!response.ok) throw new Error("Failed to fetch conversation details");
-        const convoData = await response.json();
-
-        startNewConversation();
-        conversationId = id;
-
-        convoData.messages.forEach(message => {
-            if (message.role === 'user') {
-                addMessageToChat({ text: message.content }, 'user');
-            } else if (message.role === 'assistant') {
-                renderAgentResponse(message.content);
-            }
-        });
-
-        document.querySelectorAll('.history-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.id === id);
-        });
-
-    } catch (error) {
-        console.error("Error loading conversation:", error);
-    }
-}
-
-function handleSendMessage(event) {
-    event.preventDefault();
-    const userMessage = messageInput.value;
-    if (!userMessage) return;
-
-    addMessageToChat({ text: userMessage }, "user");
-    sendMessageToBackend(userMessage);
-    messageInput.value = "";
-}
-
 function startNewConversation() {
+    if (unsubscribeMessages) {
+        unsubscribeMessages();
+        unsubscribeMessages = null;
+    }
+
     conversationId = null;
     chatMessages.innerHTML = "";
-    messageInput.placeholder = "Start a new mission...";
-    document.querySelectorAll('.history-item').forEach(item => {
-        item.classList.remove('active');
-    });
+
+    const welcomePayload = {
+        reply: "Hi there! I'm the Vibe Coder Project Manager. What amazing idea can I help you bring to life today?"
+    };
+    addMessageToChat(welcomePayload, 'agent', 'welcome-message');
+
     console.log("Started new conversation.");
 }
 
-async function sendMessageToBackend(message) {
-    const isNewConversation = !conversationId;
+async function handleSendMessage(event) {
+    event.preventDefault();
+    const userMessage = messageInput.value;
+    if (!userMessage) return;
+    const currentMessage = userMessage;
+    messageInput.value = "";
+
     try {
-        const payload = { message, conversation_id: conversationId };
-        const response = await fetch(`${BACKEND_API_URL}/chat`, {
+        if (!conversationId) {
+            const convoRef = await db.collection("conversations").add({
+                title: currentMessage,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            conversationId = convoRef.id;
+            setupConversationListener(conversationId);
+        }
+
+        const messagesRef = db.collection("conversations").document(conversationId).collection("messages");
+        await messagesRef.add({
+            role: 'user',
+            content: currentMessage,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // This is now a "fire and forget" request. We don't wait for the response.
+        fetch(`${BACKEND_API_URL}/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ message: currentMessage, conversation_id: conversationId }),
         });
-
-        if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-        
-        const responseData = await response.json();
-
-        if (responseData.conversation_id) {
-            conversationId = responseData.conversation_id;
-        }
-
-        renderAgentResponse(responseData);
-
-        if (isNewConversation) {
-             loadConversationHistory();
-        }
 
     } catch (error) {
         console.error("Error sending message:", error);
-        addMessageToChat({ error: "Sorry, an error occurred. Please check the console." }, "agent");
+        addMessageToChat({ error: "Sorry, there was an issue sending your message." }, 'agent', 'error-message');
     }
 }
 
-/**
- * [REFACTORED] Renders the agent's response, now with Observability Badge.
- * @param {object} responseData The structured data from the backend.
- */
-function renderAgentResponse(responseData) {
-    let contentPayload = {
-        text: responseData.reply || "",
-        plan: responseData.plan || null,
-        code: responseData.code_file || null,
-        invoked_agent: responseData.invoked_agent || null, // Capture the agent name
-    };
-    addMessageToChat(contentPayload, "agent");
+function setupConversationListener(id) {
+    const messagesRef = db.collection("conversations").document(id).collection("messages").orderBy("timestamp");
+
+    unsubscribeMessages = messagesRef.onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(change => {
+            const messageData = change.doc.data();
+            const messageId = change.doc.id;
+            const existingEl = document.getElementById(messageId);
+
+            if (change.type === 'added' && !existingEl) {
+                if (messageData.role === 'user') {
+                    addMessageToChat({ reply: messageData.content }, 'user', messageId);
+                } else if (messageData.role === 'assistant') {
+                    addMessageToChat(messageData.content, 'agent', messageId, messageData.status);
+                }
+            } else if (change.type === 'modified' && existingEl) {
+                if (messageData.role === 'assistant') {
+                    updateMessageInChat(messageData.content, messageId, messageData.status);
+                }
+            }
+        });
+    }, error => {
+        console.error("Error with real-time listener:", error);
+    });
 }
 
-
 // ===============================================================================
-// UI Helper Functions
+// UI Helper Functions - REFACTORED FOR REAL-TIME
 // ===============================================================================
 
-/**
- * [REFACTORED] Adds a message to the chat UI. Now handles a payload object.
- * @param {object} payload The content payload for the message.
- * @param {string} sender 'user' or 'agent'.
- */
-function addMessageToChat(payload, sender) {
+function addMessageToChat(payload, sender, messageId, status = 'complete') {
     const messageElement = document.createElement("div");
+    messageElement.id = messageId;
     messageElement.classList.add("message", `${sender}-message`);
 
-    let content = "";
+    if (status === 'thinking') {
+        messageElement.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+    } else {
+        messageElement.innerHTML = generateMessageHtml(payload);
+    }
+    
+    chatMessages.appendChild(messageElement);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
-    // [NEW] Add the Observability Badge if an agent was invoked
-    if (sender === 'agent' && payload.invoked_agent) {
+function updateMessageInChat(payload, messageId) {
+    const messageElement = document.getElementById(messageId);
+    if (messageElement) {
+        messageElement.innerHTML = generateMessageHtml(payload);
+    }
+}
+
+function generateMessageHtml(payload) {
+    let content = "";
+    if (payload.invoked_agent) {
         content += `<div class="agent-badge">${payload.invoked_agent.toUpperCase()}</div>`;
     }
-
-    if (payload.text) {
-        const htmlReply = converter.makeHtml(payload.text);
-        content += htmlReply;
+    if (payload.reply) {
+        content += converter.makeHtml(payload.reply);
     }
-
     if (payload.plan) {
         content += `<h4>${payload.plan.title}</h4><ol>`;
         payload.plan.steps.forEach(step => { content += `<li>${step}</li>`; });
         content += "</ol>";
     }
-    
-    if (payload.code) {
-        content += `<h4>${payload.code.filename}</h4><pre>${escapeHtml(payload.code.code)}</pre>`;
-    }
-
     if (payload.error) {
         content += `<p class="error-message">${payload.error}</p>`;
     }
-
-    messageElement.innerHTML = content;
-    chatMessages.appendChild(messageElement);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-
-function escapeHtml(unsafe) {
-    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    return content;
 }

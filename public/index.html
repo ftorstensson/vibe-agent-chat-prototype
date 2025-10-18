@@ -1,8 +1,8 @@
 <!--
  Vibe Coder Chat Prototype Frontend
- v2.0 (Markdown UI)
- This version introduces the 'showdown' library to enable markdown rendering
- for AI responses, resolving the formatting regression.
+ v4.1 (Real-Time UX - Zero Config)
+ This version uses Firebase Hosting's reserved URLs for automated SDK
+ initialization, aligning with our definitive ground truth documentation.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -14,21 +14,17 @@
 </head>
 <body>
     
-    <!-- Main container for the two-column layout -->
     <div class="app-container">
-
-        <!-- Sidebar for conversation history -->
         <div class="history-panel" id="history-panel">
             <div class="history-header">
                 <h3>Conversations</h3>
                 <button id="new-chat-button">+ New Chat</button>
             </div>
             <div class="history-list" id="history-list">
-                <!-- Conversation history will be added here by JavaScript -->
+                <!-- Conversation history will be added here -->
             </div>
         </div>
 
-        <!-- This is the existing chat container -->
         <div class="chat-container">
             <div class="chat-header">
                 <h2>Vibe Coder Agency</h2>
@@ -36,7 +32,7 @@
             </div>
             
             <div class="chat-messages" id="chat-messages">
-                <!-- Messages will be added here by JavaScript -->
+                <!-- Messages will be added here -->
             </div>
             
             <form class="chat-input-form" id="chat-form">
@@ -49,10 +45,13 @@
                 <button type="submit">Send</button>
             </form>
         </div>
-
     </div>
 
-    <!-- [NEW] Include the showdown library for Markdown rendering -->
+    <!-- [REVISED] Use Firebase's reserved URLs for auto-configuration -->
+    <script src="/__/firebase/8.10.1/firebase-app.js"></script>
+    <script src="/__/firebase/8.10.1/firebase-firestore.js"></script>
+    <script src="/__/firebase/init.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js"></script>
     <script src="app.js"></script>
 </body>
