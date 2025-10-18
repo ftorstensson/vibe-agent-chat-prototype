@@ -1,9 +1,8 @@
 // ===============================================================================
 // Vibe Coder Chat Prototype Frontend
-// v5.0 (Real-Time UX - Final)
-// This version is a complete refactor to a Firestore-driven, real-time
-// architecture. It uses onSnapshot listeners to enable a "thinking" indicator,
-// displays an automatic welcome message, and shows an agent observability badge.
+// v5.1 (Hotfix)
+// This version fixes a critical SDK initialization failure by re-introducing
+// an explicit firebaseConfig and corrects the Firestore 'doc()' method typo.
 // ===============================================================================
 
 // ===============================================================================
@@ -12,9 +11,21 @@
 
 const BACKEND_API_URL = "https://vibe-agent-backend-534939227554.australia-southeast1.run.app";
 let conversationId = null;
-let unsubscribeMessages = null; // To store the Firestore listener cleanup function
+let unsubscribeMessages = null;
 
-// Firebase is initialized automatically by /__/firebase/init.js
+// [FIXED] Use the explicit, ground-truth Firebase configuration.
+const firebaseConfig = {
+    apiKey: "AIzaSyCK-8ucH5NcrI5d9px2DSJ7Vrk1Y004PYw",
+    authDomain: "vibe-agent-final.firebaseapp.com",
+    projectId: "vibe-agent-final",
+    storageBucket: "vibe-agent-final.firebasestorage.app",
+    messagingSenderId: "534939227554",
+    appId: "1:534939227554:web:0bed74dd458e849c028efb",
+    measurementId: "G-1SE3NYW08R"
+};
+
+// Initialize Firebase and Firestore
+firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const converter = new showdown.Converter();
 
@@ -47,15 +58,12 @@ function startNewConversation() {
         unsubscribeMessages();
         unsubscribeMessages = null;
     }
-
     conversationId = null;
     chatMessages.innerHTML = "";
-
     const welcomePayload = {
         reply: "Hi there! I'm the Vibe Coder Project Manager. What amazing idea can I help you bring to life today?"
     };
     addMessageToChat(welcomePayload, 'agent', 'welcome-message');
-
     console.log("Started new conversation.");
 }
 
@@ -76,14 +84,14 @@ async function handleSendMessage(event) {
             setupConversationListener(conversationId);
         }
 
-        const messagesRef = db.collection("conversations").document(conversationId).collection("messages");
+        // [FIXED] The method name is doc(), not document()
+        const messagesRef = db.collection("conversations").doc(conversationId).collection("messages");
         await messagesRef.add({
             role: 'user',
             content: currentMessage,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // This is now a "fire and forget" request. We don't wait for the response.
         fetch(`${BACKEND_API_URL}/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -97,7 +105,8 @@ async function handleSendMessage(event) {
 }
 
 function setupConversationListener(id) {
-    const messagesRef = db.collection("conversations").document(id).collection("messages").orderBy("timestamp");
+    // [FIXED] The method name is doc(), not document()
+    const messagesRef = db.collection("conversations").doc(id).collection("messages").orderBy("timestamp");
 
     unsubscribeMessages = messagesRef.onSnapshot(snapshot => {
         snapshot.docChanges().forEach(change => {
@@ -107,7 +116,8 @@ function setupConversationListener(id) {
 
             if (change.type === 'added' && !existingEl) {
                 if (messageData.role === 'user') {
-                    addMessageToChat({ reply: messageData.content }, 'user', messageId);
+                    // User messages are now added directly from handleSendMessage,
+                    // so we don't need to re-render them here.
                 } else if (messageData.role === 'assistant') {
                     addMessageToChat(messageData.content, 'agent', messageId, messageData.status);
                 }
@@ -123,45 +133,54 @@ function setupConversationListener(id) {
 }
 
 // ===============================================================================
-// UI Helper Functions - REFACTORED FOR REAL-TIME
+// UI Helper Functions
 // ===============================================================================
 
 function addMessageToChat(payload, sender, messageId, status = 'complete') {
     const messageElement = document.createElement("div");
-    messageElement.id = messageId;
+    if (messageId) {
+        messageElement.id = messageId;
+    }
     messageElement.classList.add("message", `${sender}-message`);
 
-    if (status === 'thinking') {
-        messageElement.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+    // This logic handles both user plain text and agent rich content
+    if (sender === 'user') {
+        messageElement.textContent = payload.reply;
     } else {
-        messageElement.innerHTML = generateMessageHtml(payload);
+        if (status === 'thinking') {
+            messageElement.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+        } else {
+            messageElement.innerHTML = generateMessageHtml(payload);
+        }
     }
     
     chatMessages.appendChild(messageElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function updateMessageInChat(payload, messageId) {
+function updateMessageInChat(payload, messageId, status) {
     const messageElement = document.getElementById(messageId);
     if (messageElement) {
-        messageElement.innerHTML = generateMessageHtml(payload);
+        if (status === 'complete' || status === 'error') {
+            messageElement.innerHTML = generateMessageHtml(payload);
+        }
     }
 }
 
 function generateMessageHtml(payload) {
     let content = "";
-    if (payload.invoked_agent) {
+    if (payload && payload.invoked_agent) {
         content += `<div class="agent-badge">${payload.invoked_agent.toUpperCase()}</div>`;
     }
-    if (payload.reply) {
+    if (payload && payload.reply) {
         content += converter.makeHtml(payload.reply);
     }
-    if (payload.plan) {
+    if (payload && payload.plan) {
         content += `<h4>${payload.plan.title}</h4><ol>`;
         payload.plan.steps.forEach(step => { content += `<li>${step}</li>`; });
         content += "</ol>";
     }
-    if (payload.error) {
+    if (payload && payload.error) {
         content += `<p class="error-message">${payload.error}</p>`;
     }
     return content;

@@ -1,8 +1,8 @@
 <!--
  Vibe Coder Chat Prototype Frontend
- v4.1 (Real-Time UX - Zero Config)
- This version uses Firebase Hosting's reserved URLs for automated SDK
- initialization, aligning with our definitive ground truth documentation.
+ v5.1 (Hotfix)
+ This version reverts to the explicit Firebase CDN scripts to fix a critical
+ SDK initialization failure that was causing the application to crash.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -47,10 +47,9 @@
         </div>
     </div>
 
-    <!-- [REVISED] Use Firebase's reserved URLs for auto-configuration -->
-    <script src="/__/firebase/8.10.1/firebase-app.js"></script>
-    <script src="/__/firebase/8.10.1/firebase-firestore.js"></script>
-    <script src="/__/firebase/init.js"></script>
+    <!-- [REVISED] Reverting to explicit Firebase SDKs for stability -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js"></script>
     <script src="app.js"></script>
